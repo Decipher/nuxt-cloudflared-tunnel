@@ -1,6 +1,7 @@
 stages:
   - lint
   - test
+  - release
 
 default:
   image: node:24-bookworm
@@ -42,6 +43,16 @@ lint:types:
     - pnpm dev:prepare
     - pnpm test:types
 
+lint:commits:
+  stage: lint
+  interruptible: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == 'merge_request_event'
+  variables:
+    GIT_DEPTH: 0
+  script:
+    - pnpm commitlint --from "$CI_MERGE_REQUEST_DIFF_BASE_SHA" --to HEAD
+
 test:
   stage: test
   interruptible: true
@@ -53,3 +64,19 @@ build:
   interruptible: true
   script:
     - pnpm exec nuxt-module-build build
+
+release:
+  stage: release
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH && $CI_PIPELINE_SOURCE == 'push'
+      when: manual
+  variables:
+    GIT_DEPTH: 0
+  before_script:
+    - corepack enable
+    - pnpm install --frozen-lockfile
+    - git config user.name "GitLab CI"
+    - git config user.email "ci@gitlab.local"
+    - git remote set-url origin "https://gitlab-ci-token:${CI_JOB_TOKEN}@${CI_SERVER_HOST}/${CI_PROJECT_PATH}.git"
+  script:
+    - pnpm release
