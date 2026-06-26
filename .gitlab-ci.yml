@@ -35,6 +35,13 @@ lint:
   script:
     - pnpm lint
 
+lint:types:
+  stage: lint
+  interruptible: true
+  script:
+    - pnpm dev:prepare
+    - pnpm test:types
+
 test:
   stage: test
   interruptible: true

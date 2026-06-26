@@ -114,7 +114,8 @@ export default defineNuxtModule<ModuleOptions>({
               nuxt.options.runtimeConfig.public.cloudflaredTunnelUrl
                 = tunnelUrl
             }
-          } catch (error) {
+          }
+          catch (error) {
             console.error(
               `Failed to start Cloudflare tunnel for ${target.label}:`,
               error,
@@ -124,7 +125,8 @@ export default defineNuxtModule<ModuleOptions>({
 
         if (target.delay) {
           setTimeout(run, target.delay)
-        } else {
+        }
+        else {
           await run()
         }
       }
