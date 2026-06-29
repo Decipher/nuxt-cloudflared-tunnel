@@ -6,35 +6,9 @@
 [![Nuxt][nuxt-src]][nuxt-href]
 [![codecov][codecov-src]][codecov-href]
 
-Nuxt module that opens a [Cloudflare Quick Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) to the dev server on startup, via [`untun`](https://github.com/unjs/untun). Useful for sharing a running dev server (e.g. for testing on a phone, or with a webhook provider) without deploying. It only runs in `nuxt dev`, it is a no-op in production builds.
-
-Submit bug reports and feature suggestions, or track changes, in the [issue queue](https://github.com/Decipher/nuxt-cloudflared-tunnel/issues).
+> Nuxt module that starts a Cloudflare Quick Tunnel to the dev server on startup, with the URL available at runtime.
 
 - [Release notes](/CHANGELOG.md)
-
-## Table of contents
-
-- [Introduction](#introduction)
-- [Features](#features)
-- [Requirements](#requirements)
-- [Installation](#installation)
-- [Configuration](#configuration)
-- [How it works](#how-it-works)
-- [FAQ](#faq)
-- [Roadmap](#roadmap)
-- [Testing](#testing)
-- [Contributing](#contributing)
-- [Maintainers](#maintainers)
-
-## Introduction
-
-Nuxt has decent support for tunneling via `nuxi dev --tunnel` (also backed by Cloudflare Quick Tunnels), but using it as a one-off CLI flag has the same limitations as running `cloudflared` in a second terminal by hand:
-
-- The tunnel isn't tied to the Nuxt config or committed to the repo, so every contributor has to know to pass the flag (or run `cloudflared` manually) themselves.
-- The URL isn't exposed anywhere the app can read it. Building callback URLs (OAuth redirects, Stripe/GitHub webhooks) for dynamic Quick Tunnel URLs means manually copying the printed URL around.
-- There's no way to disable it per-environment (e.g. CI) via config, only by remembering to drop the flag.
-
-This module makes the tunnel a first-class part of the Nuxt config: `modules: ['nuxt-cloudflared-tunnel']`, committed once, and the URL is available at runtime via `useRuntimeConfig()` and `$tunnelUrl`/`$isTunnel`, for exactly the callback-URL use case above.
 
 ## Features
 
@@ -52,28 +26,34 @@ This module requires:
 - Nuxt `^4.0.0`
 - A network path to Cloudflare's edge (Quick Tunnels are created over the open internet, so they won't work fully offline or behind an egress-restricted proxy)
 
-## Installation
+## Quick setup
 
-1. Add `nuxt-cloudflared-tunnel` as a dev dependency:
+Install the module to your Nuxt application with one command:
 
-   ```bash
-   # pnpm
-   pnpm add -D nuxt-cloudflared-tunnel
+```bash
+npx nuxt module add nuxt-cloudflared-tunnel
+```
 
-   # yarn
-   yarn add -D nuxt-cloudflared-tunnel
+Or install manually:
 
-   # npm
-   npm install -D nuxt-cloudflared-tunnel
-   ```
+```bash
+# pnpm
+pnpm add -D nuxt-cloudflared-tunnel
 
-1. Add it to the `modules` section of `nuxt.config.ts`:
+# yarn
+yarn add -D nuxt-cloudflared-tunnel
 
-   ```ts
-   export default defineNuxtConfig({
-     modules: ['nuxt-cloudflared-tunnel'],
-   })
-   ```
+# npm
+npm install -D nuxt-cloudflared-tunnel
+```
+
+Then add it to the `modules` section of `nuxt.config.ts`:
+
+```ts
+export default defineNuxtConfig({
+  modules: ['nuxt-cloudflared-tunnel'],
+})
+```
 
 That's it. Run `nuxt dev` and the tunnel starts automatically once the dev server is listening:
 
@@ -84,6 +64,16 @@ That's it. Run `nuxt dev` and the tunnel starts automatically once the dev serve
 ```
 
 The tunnel URL is exposed to the app at runtime via `useRuntimeConfig().public.cloudflaredTunnelUrl`, and `$tunnelUrl` / `$isTunnel` from the runtime plugin ([`src/runtime/plugin.ts`](./src/runtime/plugin.ts)).
+
+## Introduction
+
+Nuxt has decent support for tunneling via `nuxi dev --tunnel` (also backed by Cloudflare Quick Tunnels), but using it as a one-off CLI flag has the same limitations as running `cloudflared` in a second terminal by hand:
+
+- The tunnel isn't tied to the Nuxt config or committed to the repo, so every contributor has to know to pass the flag (or run `cloudflared` manually) themselves.
+- The URL isn't exposed anywhere the app can read it. Building callback URLs (OAuth redirects, Stripe/GitHub webhooks) for dynamic Quick Tunnel URLs means manually copying the printed URL around.
+- There's no way to disable it per-environment (e.g. CI) via config, only by remembering to drop the flag.
+
+This module makes the tunnel a first-class part of the Nuxt config: `modules: ['nuxt-cloudflared-tunnel']`, committed once, and the URL is available at runtime via `useRuntimeConfig()` and `$tunnelUrl`/`$isTunnel`, for exactly the callback-URL use case above.
 
 ## Configuration
 
@@ -101,13 +91,13 @@ export default defineNuxtConfig({
 })
 ```
 
-| Option      | Type              | Default     | Description                                                                                       |
-| ----------- | ----------------- | ----------- | ------------------------------------------------------------------------------------------------- |
-| `enabled`   | `boolean`         | `true`      | Disable to skip starting a tunnel (e.g. in CI or restricted networks).                            |
-| `port`      | `number`          | `undefined` | Force a specific local port instead of auto-detecting the dev server's.                           |
-| `log`       | `boolean`         | `true`      | Log the tunnel URL and allowed host to the console.                                               |
-| `storybook` | `boolean`         | `false`     | Shorthand to tunnel a Storybook dev server on port 6006 (5s startup delay).                       |
-| `tunnels`   | `TunnelTarget[]`  | `[]`        | Extra services to tunnel. Each `{ port, label, delay? }` opens a separate Quick Tunnel.           |
+| Option      | Type             | Default     | Description                                                                                     |
+| ----------- | ---------------- | ----------- | ----------------------------------------------------------------------------------------------- |
+| `enabled`   | `boolean`        | `true`      | Disable to skip starting a tunnel (e.g. in CI or restricted networks).                          |
+| `port`      | `number`         | `undefined` | Force a specific local port instead of auto-detecting the dev server's.                         |
+| `log`       | `boolean`        | `true`      | Log the tunnel URL and allowed host to the console.                                             |
+| `storybook` | `boolean`        | `false`     | Shorthand to tunnel a Storybook dev server on port 6006 (5s startup delay).                     |
+| `tunnels`   | `TunnelTarget[]` | `[]`        | Extra services to tunnel. Each `{ port, label, delay? }` opens a separate Quick Tunnel.         |
 
 ### Tunneling extra services
 
@@ -143,7 +133,7 @@ viteFinal: (config) => {
 
 The module handles the Nuxt side automatically (`vite.server.allowedHosts = true`), but Storybook's Vite config is separate.
 
-The [`playground`](./playground) ships a working Storybook setup (config under `.storybook/`, sample components and stories in `playground/components/`) wired up with `cloudflaredTunnel: { storybook: true }` - run `pnpm storybook` alongside `pnpm dev` to see both services tunneled.
+The [`playground`](./playground) ships a working Storybook setup (config under `.storybook/`, sample components and stories in `playground/components/`) wired up with `cloudflaredTunnel: { storybook: true }` - run `pnpm dev:all` to see both services tunneled.
 
 ## How it works
 
@@ -175,7 +165,7 @@ If `untun` fails to start a tunnel (no tunnel returned, or the call rejects, e.g
 
 ## Roadmap
 
-Today this module only wraps Cloudflare **Quick Tunnels**: ephemeral, free, no Cloudflare account config required, but the URL changes every time the dev server restarts. That's fine for ad-hoc sharing (phone testing, a one-off webhook test) but not for anything needing a stable URL across restarts (OAuth app settings, third-party webhook configs that don't support easy URL updates).
+Today this module only wraps Cloudflare Quick Tunnels: ephemeral, free, no Cloudflare account config required, but the URL changes every time the dev server restarts. That's fine for ad-hoc sharing (phone testing, a one-off webhook test) but not for anything needing a stable URL across restarts (OAuth app settings, third-party webhook configs that don't support easy URL updates).
 
 Possible future scope, not yet implemented:
 
@@ -190,7 +180,7 @@ None of this is built. The module is intentionally a small, focused wrapper arou
 
 Unit tests live in [`test/module.test.ts`](./test/module.test.ts) and run with `pnpm test`. `@nuxt/kit` and `untun` are mocked so the tests exercise the module's `setup()` logic directly: port resolution, the `listen` hook, runtime config/Vite mutation, `storybook` shorthand, `tunnels` array handling, and tunnel-start failure handling, without booting a real Nuxt instance or network tunnel.
 
-## Contributing
+## Contribution
 
 <details>
   <summary>Local development</summary>
@@ -225,6 +215,10 @@ pnpm test:watch
 </details>
 
 Bug reports and feature requests are welcome via [GitHub Issues](https://github.com/Decipher/nuxt-cloudflared-tunnel/issues).
+
+## License
+
+[MIT](./LICENSE)
 
 ## Maintainers
 
