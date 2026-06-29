@@ -1,6 +1,11 @@
 export default defineNuxtConfig({
   modules: ['../src/module'],
   devtools: { enabled: true },
+  app: {
+    head: {
+      link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
+    },
+  },
   compatibilityDate: '2026-06-29',
   cloudflaredTunnel: {
     // Also tunnel a Storybook dev server on :6006. Only enabled when Storybook

@@ -4,6 +4,7 @@
 [![npm downloads][npm-downloads-src]][npm-downloads-href]
 [![License][license-src]][license-href]
 [![Nuxt][nuxt-src]][nuxt-href]
+[![codecov][codecov-src]][codecov-href]
 
 Nuxt module that opens a [Cloudflare Quick Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) to the dev server on startup, via [`untun`](https://github.com/unjs/untun). Useful for sharing a running dev server (e.g. for testing on a phone, or with a webhook provider) without deploying. It only runs in `nuxt dev`, it is a no-op in production builds.
 
@@ -243,3 +244,6 @@ Bug reports and feature requests are welcome via [GitHub Issues](https://github.
 
 [nuxt-src]: https://img.shields.io/badge/Nuxt-020420?logo=nuxt.js
 [nuxt-href]: https://nuxt.com
+
+[codecov-src]: https://codecov.io/gh/Decipher/nuxt-cloudflared-tunnel/graph/badge.svg
+[codecov-href]: https://codecov.io/gh/Decipher/nuxt-cloudflared-tunnel
