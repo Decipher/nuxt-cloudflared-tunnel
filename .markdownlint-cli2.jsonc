@@ -1,0 +1,27 @@
+{
+  // Only the search-replace custom rule is enabled (no built-in MDxxx rules).
+  "config": {
+    "default": false,
+    "search-replace": {
+      "rules": [
+        {
+          "name": "em-dash",
+          "message": "Em-dash (U+2014) is an AI tell; use a spaced hyphen.",
+          "searchPattern": "/\\s*\\u2014\\s*/g",
+          "replace": " - ",
+          "searchScope": "all"
+        },
+        {
+          "name": "en-dash",
+          "message": "En-dash (U+2013) is an AI tell; use a spaced hyphen.",
+          "searchPattern": "/\\s*\\u2013\\s*/g",
+          "replace": " - ",
+          "searchScope": "all"
+        }
+      ]
+    }
+  },
+  "customRules": ["markdownlint-rule-search-replace"],
+  "globs": ["**/*.md"],
+  "gitignore": true
+}

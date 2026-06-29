@@ -4,5 +4,6 @@ dist/
 .output/
 playground/.nuxt/
 playground/.output/
+storybook-static/
 *.log
 .DS_Store

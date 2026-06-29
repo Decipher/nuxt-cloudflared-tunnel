@@ -1,0 +1,30 @@
+# mise — pins local tool versions and provides convenience tasks.
+# Install: https://mise.jdx.dev/ (`mise install` fetches the versions below).
+
+[tools]
+node = "24"
+pnpm = "10.14.0"
+
+[tasks.dev]
+run = "pnpm dev"
+description = "Run the Nuxt playground (tunnel starts on :3000)."
+
+[tasks.storybook]
+run = "pnpm storybook"
+description = "Run Storybook on :6006 (separate process from Nuxt)."
+
+[tasks."dev:all"]
+run = "pnpm dev:all"
+description = "Run Nuxt + Storybook together, with both services tunneled."
+
+[tasks.build-storybook]
+run = "pnpm build-storybook"
+description = "Build Storybook as a static site into ./storybook-static."
+
+[tasks.lint]
+run = "pnpm lint"
+description = "ESLint + markdown lint."
+
+[tasks.test]
+run = "pnpm test"
+description = "Run unit tests."
