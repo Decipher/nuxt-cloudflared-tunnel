@@ -49,6 +49,8 @@
     "module",
     "cloudflare",
     "tunnel",
-    "devtools"
+    "devtools",
+    "storybook",
+    "proxy"
   ]
 }

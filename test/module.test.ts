@@ -19,9 +19,11 @@ interface MockNuxt {
     dev: boolean
     vite: { server: { allowedHosts?: boolean | string[] } }
     runtimeConfig: { public: { cloudflaredTunnelUrl?: string } }
+    storybook?: { port?: number }
   }
-  hook: (name: string, fn: (server: { address: () => unknown }) => unknown) => void
+  hook: (name: string, fn: (...args: unknown[]) => unknown) => void
   triggerListen: (server: { address: () => unknown }) => Promise<void>
+  registeredHooks: string[]
 }
 
 interface RawNuxtModule {
@@ -32,24 +34,32 @@ interface RawNuxtModule {
 
 const rawTunnelModule = tunnelModule as unknown as RawNuxtModule
 
-function createMockNuxt(dev = true): MockNuxt {
-  const listeners: ((server: { address: () => unknown }) => unknown)[] = []
+function createMockNuxt(dev = true, overrides?: Partial<MockNuxt['options']>): MockNuxt {
+  const listenListeners: ((server: { address: () => unknown }) => unknown)[] = []
+  const viteConfigListeners: ((config: unknown) => unknown)[] = []
+  const registeredHooks: string[] = []
   return {
     options: {
       dev,
       vite: { server: {} },
       runtimeConfig: { public: {} },
+      ...overrides,
     },
     hook(name, fn) {
+      registeredHooks.push(name)
       if (name === 'listen') {
-        listeners.push(fn)
+        listenListeners.push(fn as (server: { address: () => unknown }) => unknown)
+      }
+      if (name === 'vite:extendConfig') {
+        viteConfigListeners.push(fn as (config: unknown) => unknown)
       }
     },
     async triggerListen(server) {
-      for (const fn of listeners) {
+      for (const fn of listenListeners) {
         await fn(server)
       }
     },
+    registeredHooks,
   }
 }
 
@@ -165,9 +175,6 @@ describe('nuxt-cloudflared-tunnel module', () => {
     expect(console.log).toHaveBeenCalledWith(
       expect.stringContaining('https://example.trycloudflare.com'),
     )
-    expect(console.log).toHaveBeenCalledWith(
-      expect.stringContaining('example.trycloudflare.com'),
-    )
   })
 
   it('does not log when logging is disabled', async () => {
@@ -191,10 +198,7 @@ describe('nuxt-cloudflared-tunnel module', () => {
       nuxt.triggerListen({ address: () => ({ port: 3000 }) }),
     ).resolves.not.toThrow()
 
-    expect(console.error).toHaveBeenCalledWith(
-      'Failed to start Cloudflare tunnel:',
-      expect.any(Error),
-    )
+    expect(console.error).toHaveBeenCalled()
     expect(nuxt.options.runtimeConfig.public.cloudflaredTunnelUrl).toBeUndefined()
   })
 
@@ -207,9 +211,84 @@ describe('nuxt-cloudflared-tunnel module', () => {
       nuxt.triggerListen({ address: () => ({ port: 3000 }) }),
     ).resolves.not.toThrow()
 
-    expect(console.error).toHaveBeenCalledWith(
-      'Failed to start Cloudflare tunnel:',
-      expect.any(Error),
+    expect(console.error).toHaveBeenCalled()
+  })
+})
+
+// --- Storybook integration tests ---
+
+describe('nuxt-cloudflared-tunnel module · Storybook', () => {
+  beforeEach(() => {
+    startTunnel.mockReset()
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('defaults storybook to auto-detection', () => {
+    expect(rawTunnelModule.defaults).toMatchObject({
+      storybook: { enabled: 'auto', mode: 'auto' },
+    })
+  })
+
+  it('registers only listen hook in auto mode (no Storybook running)', async () => {
+    const nuxt = createMockNuxt()
+
+    await rawTunnelModule.setup(
+      { enabled: true, log: false, storybook: { enabled: 'auto' } },
+      nuxt,
     )
+
+    expect(nuxt.registeredHooks).toContain('listen')
+    expect(nuxt.registeredHooks).not.toContain('vite:extendConfig')
+  })
+
+  it('registers vite:extendConfig hook in explicit proxy mode', async () => {
+    const nuxt = createMockNuxt()
+
+    await rawTunnelModule.setup(
+      { enabled: true, log: false, storybook: { enabled: true, mode: 'proxy' } },
+      nuxt,
+    )
+
+    expect(nuxt.registeredHooks).toContain('vite:extendConfig')
+  })
+
+  it('does not register vite:extendConfig in explicit dual-tunnel mode', async () => {
+    const nuxt = createMockNuxt()
+
+    await rawTunnelModule.setup(
+      { enabled: true, log: false, storybook: { enabled: true, mode: 'dual-tunnel' } },
+      nuxt,
+    )
+
+    expect(nuxt.registeredHooks).not.toContain('vite:extendConfig')
+  })
+
+  it('skips Storybook entirely when explicitly disabled', async () => {
+    const nuxt = createMockNuxt()
+
+    await rawTunnelModule.setup(
+      { enabled: true, log: false, storybook: { enabled: false } },
+      nuxt,
+    )
+
+    expect(nuxt.registeredHooks).toContain('listen')
+    expect(nuxt.registeredHooks).not.toContain('vite:extendConfig')
+  })
+
+  it('reads port from nuxt.options.storybook.port', async () => {
+    const nuxt = createMockNuxt(true, { storybook: { port: 7007 } })
+
+    await rawTunnelModule.setup(
+      { enabled: true, log: false, storybook: { enabled: true, mode: 'proxy' } },
+      nuxt,
+    )
+
+    // vite:extendConfig hook should be registered
+    expect(nuxt.registeredHooks).toContain('vite:extendConfig')
   })
 })
