@@ -6,8 +6,10 @@
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "git+https://gitlab.local/nuxt/nuxt-cloudflared-tunnel.git"
+    "url": "git+https://github.com/Decipher/nuxt-cloudflared-tunnel.git"
   },
+  "homepage": "https://github.com/Decipher/nuxt-cloudflared-tunnel",
+  "bugs": "https://github.com/Decipher/nuxt-cloudflared-tunnel/issues",
   "exports": {
     ".": {
       "types": "./dist/module.d.mts",
