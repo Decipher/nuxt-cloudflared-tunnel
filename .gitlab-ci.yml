@@ -57,7 +57,19 @@ test:
   stage: test
   interruptible: true
   script:
-    - pnpm test
+    - pnpm test --coverage
+    - |
+      if [ -n "$CODECOV_TOKEN" ]; then
+        curl -Os https://uploader.codecov.io/latest/linux/codecov
+        chmod +x codecov
+        ./codecov -t "$CODECOV_TOKEN"
+      fi
+  coverage: '/All files[^|]*\|[^|]*\s+([\d\.]+)/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage/cobertura-coverage.xml
 
 build:
   stage: test

@@ -54,6 +54,7 @@
     "@nuxt/test-utils": "^3.17.0",
     "@storybook-vue/nuxt": "9.0.1",
     "@storybook/vue3": "9.1.2",
+    "@vitest/coverage-v8": "^3.2.6",
     "changelogen": "^0.6.2",
     "concurrently": "^9.0.0",
     "eslint": "^9.0.0",
