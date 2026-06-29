@@ -21,7 +21,9 @@
   "types": "./dist/module.d.mts",
   "files": [
     "dist",
-    "icon.svg"
+    "icon.svg",
+    "CHANGELOG.md",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=18"

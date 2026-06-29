@@ -18,5 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Graceful failure: if a tunnel can't start (no tunnel returned, or no network path to Cloudflare's edge), the error is logged and dev server startup continues unaffected.
 - Playground with a working Storybook integration - sample components and stories that exercise the tunnel URL at runtime, ready to tunnel with `storybook: true`.
 - CI pipeline covering lint (ESLint), type-check (`vue-tsc`), unit tests (Vitest), and build, with conventional-commit enforcement and `changelogen`-driven releases.
+- GitHub Actions CI with Codecov coverage reporting.
+- `icon.svg` (Cloudflare mark) included in the published package for Nuxt DevTools module listing.
+- `engines` field declaring `node >=18` to match Nuxt 4's minimum requirement.
 
 [0.1.0]: https://github.com/Decipher/nuxt-cloudflared-tunnel/releases/tag/v0.1.0
