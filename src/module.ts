@@ -109,8 +109,13 @@ export default defineNuxtModule<ModuleOptions>({
               }
             }
 
-            // Expose tunnel URL to runtime (primary only)
+            // Expose tunnel URL to runtime (primary only).
+            // runtimeConfig is snapshotted before the listen hook fires and
+            // globalThis is not shared between Nuxt's module context and
+            // Nitro's SSR module-runner context in Nuxt 4 / Vite 7.
+            // process.env is shared across all VM contexts in the same process.
             if (target.label === 'Nuxt') {
+              process.env.__CLOUDFLARED_TUNNEL_URL = tunnelUrl
               nuxt.options.runtimeConfig.public.cloudflaredTunnelUrl
                 = tunnelUrl
             }

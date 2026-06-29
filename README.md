@@ -123,11 +123,11 @@ export default defineNuxtConfig({
 })
 ```
 
-Each target opens a separate Quick Tunnel with its own `*.trycloudflare.com` URL. The `delay` field (in ms) defers the tunnel start — useful for secondary services that take longer to boot.
+Each target opens a separate Quick Tunnel with its own `*.trycloudflare.com` URL. The `delay` field (in ms) defers the tunnel start - useful for secondary services that take longer to boot.
 
 #### Note on tunneling Storybook
 
-In Nuxt 3/4, Storybook runs as a completely separate process (via `@storybook-vue/nuxt`), not inside Nuxt. The module simply opens a tunnel to whatever is listening on the configured port — it doesn't manage Storybook's lifecycle.
+In Nuxt 3/4, Storybook runs as a completely separate process (via `@storybook-vue/nuxt`), not inside Nuxt. The module simply opens a tunnel to whatever is listening on the configured port - it doesn't manage Storybook's lifecycle.
 
 Cloudflare Quick Tunnels use random `*.trycloudflare.com` hostnames. Vite (which powers Storybook's dev server) blocks requests from unrecognized hosts by default, so you must configure Storybook's Vite to allow all hosts:
 
@@ -141,6 +141,8 @@ viteFinal: (config) => {
 ```
 
 The module handles the Nuxt side automatically (`vite.server.allowedHosts = true`), but Storybook's Vite config is separate.
+
+The [`playground`](./playground) ships a working Storybook setup (config under `.storybook/`, sample components and stories in `playground/components/`) wired up with `cloudflaredTunnel: { storybook: true }` - run `pnpm storybook` alongside `pnpm dev` to see both services tunneled.
 
 ## How it works
 
@@ -204,6 +206,12 @@ pnpm dev
 
 # Build the playground
 pnpm dev:build
+
+# Run Storybook (on :6006) - tunneled via the module's `storybook` option
+pnpm storybook
+
+# Build Storybook as a static site
+pnpm build-storybook
 
 # Run ESLint
 pnpm lint

@@ -58,6 +58,7 @@ describe('nuxt-cloudflared-tunnel module', () => {
     startTunnel.mockReset()
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
+    delete process.env.__CLOUDFLARED_TUNNEL_URL
   })
 
   afterEach(() => {
@@ -120,6 +121,9 @@ describe('nuxt-cloudflared-tunnel module', () => {
       acceptCloudflareNotice: true,
     })
     expect(nuxt.options.runtimeConfig.public.cloudflaredTunnelUrl).toBe(
+      'https://example.trycloudflare.com',
+    )
+    expect(process.env.__CLOUDFLARED_TUNNEL_URL).toBe(
       'https://example.trycloudflare.com',
     )
     expect(nuxt.options.vite.server.allowedHosts).toBe(true)
@@ -214,6 +218,7 @@ describe('nuxt-cloudflared-tunnel module · extra tunnels', () => {
     startTunnel.mockReset()
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
+    delete process.env.__CLOUDFLARED_TUNNEL_URL
   })
 
   afterEach(() => {
