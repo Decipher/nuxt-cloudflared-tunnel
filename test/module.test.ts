@@ -8,6 +8,12 @@ const { startTunnel } = vi.hoisted(() => ({
 
 vi.mock('untun', () => ({ startTunnel }))
 
+const { waitForPort } = vi.hoisted(() => ({
+  waitForPort: vi.fn(),
+}))
+
+vi.mock('../src/wait-for-port', () => ({ waitForPort }))
+
 vi.mock('@nuxt/kit', () => ({
   defineNuxtModule: <T>(definition: T) => definition,
   createResolver: () => ({ resolve: (p: string) => p }),
@@ -51,6 +57,14 @@ function createMockNuxt(dev = true): MockNuxt {
       }
     },
   }
+}
+
+/**
+ * Flush pending microtasks/macrotasks so non-awaited async work (the
+ * `waitForPort(...).then(run)` chain) completes before assertions.
+ */
+function flushPromises(): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, 0))
 }
 
 describe('nuxt-cloudflared-tunnel module', () => {
@@ -289,5 +303,135 @@ describe('nuxt-cloudflared-tunnel module · extra tunnels', () => {
     await nuxt.triggerListen({ address: () => ({ port: 3000 }) })
 
     expect(startTunnel).toHaveBeenCalledTimes(1)
+  })
+})
+
+// --- Port checking (checkPorts / per-target checkPort) ---
+
+describe('nuxt-cloudflared-tunnel module · port checking', () => {
+  beforeEach(() => {
+    startTunnel.mockReset()
+    waitForPort.mockReset()
+    vi.spyOn(console, 'log').mockImplementation(() => {})
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    delete process.env.__CLOUDFLARED_TUNNEL_URL
+  })
+
+  afterEach(() => {
+    vi.restoreAllMocks()
+  })
+
+  it('skips a secondary tunnel when its port is down and checkPorts is enabled', async () => {
+    waitForPort.mockResolvedValue(false)
+    startTunnel.mockResolvedValue({
+      getURL: vi.fn().mockResolvedValue('https://nuxt.trycloudflare.com'),
+    })
+    const nuxt = createMockNuxt()
+
+    await rawTunnelModule.setup(
+      { enabled: true, log: true, storybook: true, checkPorts: true },
+      nuxt,
+    )
+    await nuxt.triggerListen({ address: () => ({ port: 3000 }) })
+    await flushPromises()
+
+    // Primary Nuxt tunnel still starts; Storybook is skipped (port down).
+    expect(waitForPort).toHaveBeenCalledWith(6006, { timeout: 5_000 })
+    expect(startTunnel).toHaveBeenCalledTimes(1)
+    expect(startTunnel).toHaveBeenCalledWith({
+      port: 3000,
+      acceptCloudflareNotice: true,
+    })
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining('Skipping Storybook tunnel'),
+    )
+  })
+
+  it('starts a secondary tunnel once its port is reachable when checkPorts is enabled', async () => {
+    waitForPort.mockResolvedValue(true)
+    startTunnel.mockResolvedValue({
+      getURL: vi.fn().mockResolvedValue('https://sb.trycloudflare.com'),
+    })
+    const nuxt = createMockNuxt()
+
+    await rawTunnelModule.setup(
+      { enabled: true, log: false, storybook: true, checkPorts: true },
+      nuxt,
+    )
+    await nuxt.triggerListen({ address: () => ({ port: 3000 }) })
+    await flushPromises()
+
+    expect(startTunnel).toHaveBeenCalledTimes(2)
+    expect(startTunnel).toHaveBeenCalledWith({
+      port: 6006,
+      acceptCloudflareNotice: true,
+    })
+  })
+
+  it('never port-checks the primary Nuxt tunnel, even when checkPorts is enabled', async () => {
+    waitForPort.mockResolvedValue(false)
+    startTunnel.mockResolvedValue({
+      getURL: vi.fn().mockResolvedValue('https://nuxt.trycloudflare.com'),
+    })
+    const nuxt = createMockNuxt()
+
+    await rawTunnelModule.setup(
+      { enabled: true, log: false, checkPorts: true },
+      nuxt,
+    )
+    await nuxt.triggerListen({ address: () => ({ port: 3000 }) })
+    await flushPromises()
+
+    expect(waitForPort).not.toHaveBeenCalled()
+    expect(startTunnel).toHaveBeenCalledTimes(1)
+    expect(startTunnel).toHaveBeenCalledWith({
+      port: 3000,
+      acceptCloudflareNotice: true,
+    })
+  })
+
+  it('uses the legacy fixed-delay path when checkPorts is disabled (default)', async () => {
+    waitForPort.mockResolvedValue(true)
+    startTunnel.mockResolvedValue({
+      getURL: vi.fn().mockResolvedValue('https://sb.trycloudflare.com'),
+    })
+    const nuxt = createMockNuxt()
+
+    await rawTunnelModule.setup(
+      { enabled: true, log: false, storybook: true }, // checkPorts defaults to false
+      nuxt,
+    )
+    await nuxt.triggerListen({ address: () => ({ port: 3000 }) })
+    await flushPromises()
+
+    expect(waitForPort).not.toHaveBeenCalled()
+    // Storybook is still deferred via setTimeout, so only the Nuxt tunnel ran.
+    expect(startTunnel).toHaveBeenCalledTimes(1)
+  })
+
+  it('honours a per-target checkPort override when the module default is off', async () => {
+    waitForPort.mockResolvedValue(false)
+    startTunnel.mockResolvedValue({
+      getURL: vi.fn().mockResolvedValue('https://nuxt.trycloudflare.com'),
+    })
+    const nuxt = createMockNuxt()
+
+    await rawTunnelModule.setup(
+      {
+        enabled: true,
+        log: true,
+        // Module-level checkPorts is false, but this target opts in.
+        tunnels: [{ port: 8080, label: 'API', checkPort: true }],
+      },
+      nuxt,
+    )
+    await nuxt.triggerListen({ address: () => ({ port: 3000 }) })
+    await flushPromises()
+
+    expect(waitForPort).toHaveBeenCalledWith(8080, { timeout: 5_000 })
+    expect(startTunnel).toHaveBeenCalledTimes(1) // Nuxt only; API skipped
+    expect(console.log).toHaveBeenCalledWith(
+      expect.stringContaining('Skipping API tunnel'),
+    )
   })
 })

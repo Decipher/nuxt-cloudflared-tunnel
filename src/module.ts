@@ -1,5 +1,6 @@
 import { defineNuxtModule, createResolver, addPlugin } from '@nuxt/kit'
 import { startTunnel } from 'untun'
+import { waitForPort } from './wait-for-port'
 
 export interface TunnelTarget {
   /** TCP port to tunnel. */
@@ -8,6 +9,18 @@ export interface TunnelTarget {
   label: string
   /** Delay in ms before starting this tunnel (useful for secondary services). */
   delay?: number
+  /**
+   * When `true`, probe the port before starting this tunnel: open the tunnel
+   * as soon as the port is reachable, or skip it (with a log line) if nothing
+   * binds within the `delay` (default 5s). Inherits from the module-level
+   * `checkPorts` option when unset. The primary Nuxt tunnel is never gated.
+   */
+  checkPort?: boolean
+}
+
+/** Internal target, carrying a marker for the primary Nuxt tunnel. */
+interface ResolvedTarget extends TunnelTarget {
+  _primary?: boolean
 }
 
 export interface ModuleOptions {
@@ -19,6 +32,15 @@ export interface ModuleOptions {
    * Set to `true` to add it as a tunnel target with a 5s startup delay.
    */
   storybook?: boolean
+  /**
+   * When `true`, secondary tunnel targets (the `storybook` shorthand and any
+   * entry in `tunnels`) are probed before their tunnel starts: the tunnel
+   * opens as soon as the port is reachable, or is skipped if nothing ever
+   * binds within the target's `delay` (default 5s). The primary Nuxt tunnel is
+   * never gated. Default: `false` (legacy behaviour - open the tunnel
+   * regardless of whether the port is up).
+   */
+  checkPorts?: boolean
   /** Extra services to tunnel alongside the Nuxt dev server. */
   tunnels?: TunnelTarget[]
 }
@@ -33,6 +55,7 @@ export default defineNuxtModule<ModuleOptions>({
     port: undefined,
     log: true,
     storybook: false,
+    checkPorts: false,
     tunnels: [],
   },
   async setup(options, nuxt) {
@@ -46,12 +69,13 @@ export default defineNuxtModule<ModuleOptions>({
     addPlugin(resolver.resolve('./runtime/plugin'))
 
     // --- Determine tunnel targets ---
-    const targets: TunnelTarget[] = []
+    const targets: ResolvedTarget[] = []
 
-    // Primary Nuxt tunnel
+    // Primary Nuxt tunnel (never port-checked: the listen hook guarantees it)
     targets.push({
       port: options.port ?? 0, // 0 = auto-detect at listen time
       label: 'Nuxt',
+      _primary: true,
     })
 
     // Storybook shorthand
@@ -128,7 +152,31 @@ export default defineNuxtModule<ModuleOptions>({
           }
         }
 
-        if (target.delay) {
+        // The primary Nuxt target is guaranteed to be listening (the hook
+        // fired), so it is never port-checked. Secondary targets opt in via
+        // the per-target `checkPort` flag, falling back to the module-level
+        // `checkPorts` option (default: false = legacy behaviour).
+        const shouldCheckPort
+          = !target._primary
+            && (target.checkPort ?? options.checkPorts ?? false)
+
+        if (shouldCheckPort) {
+          // Wait for the port to come up instead of sleeping for a fixed
+          // delay: open the tunnel as soon as the service is reachable, or
+          // skip it (with a log line) if nothing ever binds within the timeout.
+          const timeout = target.delay ?? 5_000
+          waitForPort(port, { timeout }).then((up) => {
+            if (up) {
+              run()
+            }
+            else if (options.log) {
+              console.log(
+                `⏭️ Skipping ${target.label} tunnel - nothing listening on :${port}`,
+              )
+            }
+          })
+        }
+        else if (target.delay) {
           setTimeout(run, target.delay)
         }
         else {

@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- `checkPorts` module option (default `false`) and per-target `checkPort` flag. When enabled, secondary tunnel targets (the `storybook` shorthand and any entry in `tunnels`) are probed before their tunnel starts: the tunnel opens as soon as the port is reachable, or is skipped (with a `⏭️ Skipping …` log line) if nothing ever binds within the target's `delay` (default 5 s). Previously a tunnel was always opened - even to a dead port - producing a `*.trycloudflare.com` URL that returned a 502 to visitors. The primary Nuxt tunnel is never gated.
+
 ## [0.1.0] - 2026-06-29
 
 ### Added
