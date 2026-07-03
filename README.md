@@ -86,18 +86,20 @@ export default defineNuxtConfig({
     port: undefined, // override the port; defaults to the dev server's detected port (falls back to 3000)
     log: true, // set false to silence the module's console output
     storybook: false, // set true to also tunnel a Storybook dev server on :6006
+    checkPorts: false, // set true to only tunnel secondary targets whose port is actually listening
     tunnels: [], // arbitrary extra tunnel targets
   },
 })
 ```
 
-| Option      | Type             | Default     | Description                                                                                     |
-| ----------- | ---------------- | ----------- | ----------------------------------------------------------------------------------------------- |
-| `enabled`   | `boolean`        | `true`      | Disable to skip starting a tunnel (e.g. in CI or restricted networks).                          |
-| `port`      | `number`         | `undefined` | Force a specific local port instead of auto-detecting the dev server's.                         |
-| `log`       | `boolean`        | `true`      | Log the tunnel URL and allowed host to the console.                                             |
-| `storybook` | `boolean`        | `false`     | Shorthand to tunnel a Storybook dev server on port 6006 (5s startup delay).                     |
-| `tunnels`   | `TunnelTarget[]` | `[]`        | Extra services to tunnel. Each `{ port, label, delay? }` opens a separate Quick Tunnel.         |
+| Option        | Type             | Default     | Description                                                                                     |
+| ------------- | ---------------- | ----------- | ----------------------------------------------------------------------------------------------- |
+| `enabled`     | `boolean`        | `true`      | Disable to skip starting a tunnel (e.g. in CI or restricted networks).                          |
+| `port`        | `number`         | `undefined` | Force a specific local port instead of auto-detecting the dev server's.                         |
+| `log`         | `boolean`        | `true`      | Log the tunnel URL and allowed host to the console.                                             |
+| `storybook`   | `boolean`        | `false`     | Shorthand to tunnel a Storybook dev server on port 6006 (5s startup delay).                     |
+| `checkPorts`  | `boolean`        | `false`     | Only open secondary tunnels when their port is actually listening (see [Port checking](#port-checking)). |
+| `tunnels`     | `TunnelTarget[]` | `[]`        | Extra services to tunnel. Each `{ port, label, delay?, checkPort? }` opens a separate Quick Tunnel. |
 
 ### Tunneling extra services
 
@@ -118,7 +120,7 @@ Each target opens a separate Quick Tunnel with its own `*.trycloudflare.com` URL
 
 #### Note on tunneling Storybook
 
-In Nuxt 3/4, Storybook runs as a completely separate process (via `@storybook-vue/nuxt`), not inside Nuxt. The module simply opens a tunnel to whatever is listening on the configured port - it doesn't manage Storybook's lifecycle.
+In Nuxt 3/4, Storybook runs as a completely separate process (via `@storybook-vue/nuxt`), not inside Nuxt. The module opens a tunnel to whatever is listening on the configured port - it doesn't manage Storybook's lifecycle. By default the tunnel is opened regardless of whether Storybook has started yet; enable [`checkPorts`](#port-checking) to skip it when nothing is bound to the port.
 
 Cloudflare Quick Tunnels use random `*.trycloudflare.com` hostnames. Vite (which powers Storybook's dev server) blocks requests from unrecognized hosts by default, so you must configure Storybook's Vite to allow all hosts:
 
@@ -135,6 +137,30 @@ The module handles the Nuxt side automatically (`vite.server.allowedHosts = true
 
 The [`playground`](./playground) ships a working Storybook setup (config under `.storybook/`, sample components and stories in `playground/components/`) wired up with `cloudflaredTunnel: { storybook: true }` - run `pnpm dev:all` to see both services tunneled.
 
+### Port checking
+
+By default, a tunnel target is opened as soon as its `delay` (if any) elapses - even if nothing is actually listening on the port. Cloudflare Quick Tunnels establish the tunnel at the edge first, so a `*.trycloudflare.com` URL is minted and printed regardless, leaving visitors with a dead endpoint (502 / connection refused) when the local service isn't running.
+
+Set `checkPorts: true` to probe the port first. For each **secondary** target (the `storybook` shorthand and every entry in `tunnels`), the module then:
+
+1. Polls the port (every 500 ms) until it accepts a connection, or until the target's `delay` elapses (default 5 s).
+2. Opens the tunnel as soon as the port is reachable - so a fast-booting service is tunneled immediately rather than after the full delay.
+3. **Skips** the tunnel and logs `⏭️ Skipping <label> tunnel - nothing listening on :<port>` if nothing ever binds.
+
+The primary Nuxt tunnel is never gated (the `listen` hook only fires once the dev server is accepting connections, so its port is guaranteed up). Per-target, set `checkPort: true` (or `false`) to override the module-level default:
+
+```ts
+export default defineNuxtConfig({
+  cloudflaredTunnel: {
+    checkPorts: true, // applies to every secondary target by default
+    tunnels: [
+      { port: 6006, label: 'Storybook' },
+      { port: 8080, label: 'API', checkPort: false }, // always tunnel, even if down
+    ],
+  },
+})
+```
+
 ## How it works
 
 On the Nuxt `listen` hook (fired once the dev server is accepting connections), the module:
@@ -145,7 +171,7 @@ On the Nuxt `listen` hook (fired once the dev server is accepting connections), 
 4. Sets `vite.server.allowedHosts = true` so Vite's dev server accepts requests with the tunnel's `Host` header (Vite blocks unrecognized hosts by default).
 5. Exposes the URL via `runtimeConfig.public.cloudflaredTunnelUrl`.
 
-For each extra tunnel target (including `storybook: true`), steps 2-3 repeat with the target's port. Targets with a `delay` are started via `setTimeout` so the primary tunnel isn't blocked.
+For each extra tunnel target (including `storybook: true`), steps 2-3 repeat with the target's port. Targets with a `delay` are started via `setTimeout` so the primary tunnel isn't blocked. When `checkPorts` (or a target's `checkPort`) is enabled, the `delay` is instead used as a polling deadline: the tunnel starts the moment the port is reachable, or is skipped if nothing ever binds.
 
 If `untun` fails to start a tunnel (no tunnel returned, or the call rejects, e.g. no network access to Cloudflare's edge), the error is logged with `console.error` and dev server startup continues unaffected.
 
