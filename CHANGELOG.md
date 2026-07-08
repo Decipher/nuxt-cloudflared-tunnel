@@ -15,7 +15,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### ❤️ Contributors
 
-- Administrator <gitlab_admin_f6a996@example.com>
+- Stuart Clark ([@Decipher](https://github.com/Decipher))
 
 ## [0.1.0] - 2026-06-29
 
