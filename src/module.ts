@@ -45,6 +45,30 @@ export default defineNuxtModule<ModuleOptions>({
 
     addPlugin(resolver.resolve('./runtime/plugin'))
 
+    // --- Track tunnel handles so they can be closed on teardown ---
+    const tunnels: Array<{ close: () => Promise<void> }> = []
+
+    const closeTunnels = async () => {
+      await Promise.all(
+        tunnels.splice(0).map(t => t.close().catch(() => {})),
+      )
+    }
+
+    // untun only handles SIGINT/SIGUSR1/SIGUSR2. Dev servers are commonly
+    // torn down via SIGTERM (process supervisors, pkill) or SIGHUP (terminal
+    // close), which would orphan the cloudflared child process.
+    for (const signal of ['SIGTERM', 'SIGHUP'] as const) {
+      process.once(signal, () => {
+        void closeTunnels().finally(() => {
+          // Re-raise with default handler so the process exits as expected.
+          process.kill(process.pid, signal)
+        })
+      })
+    }
+
+    // Close all tunnels when Nuxt shuts down (clean dev-server teardown).
+    nuxt.hook('close', closeTunnels)
+
     // --- Determine tunnel targets ---
     const targets: TunnelTarget[] = []
 
@@ -92,6 +116,8 @@ export default defineNuxtModule<ModuleOptions>({
             if (!tunnel) {
               throw new Error('untun did not return a tunnel')
             }
+
+            tunnels.push(tunnel)
 
             const tunnelUrl = await tunnel.getURL()
             const tunnelHost = tunnelUrl.replace(/^https?:\/\//, '')

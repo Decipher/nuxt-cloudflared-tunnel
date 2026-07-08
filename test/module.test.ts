@@ -22,6 +22,7 @@ interface MockNuxt {
   }
   hook: (name: string, fn: (...args: unknown[]) => unknown) => void
   triggerListen: (server: { address: () => unknown }) => Promise<void>
+  triggerClose: () => Promise<void>
 }
 
 interface RawNuxtModule {
@@ -32,8 +33,28 @@ interface RawNuxtModule {
 
 const rawTunnelModule = tunnelModule as unknown as RawNuxtModule
 
+// Snapshot/restore signal listeners so module-registered handlers don't
+// accumulate across tests and trip MaxListenersExceededWarning.
+function snapshotSignals() {
+  return {
+    SIGTERM: process.listeners('SIGTERM'),
+    SIGHUP: process.listeners('SIGHUP'),
+  }
+}
+
+function restoreSignals(saved: ReturnType<typeof snapshotSignals>) {
+  for (const sig of ['SIGTERM', 'SIGHUP'] as const) {
+    for (const listener of process.listeners(sig)) {
+      if (!saved[sig].includes(listener)) {
+        process.removeListener(sig, listener as (...args: unknown[]) => void)
+      }
+    }
+  }
+}
+
 function createMockNuxt(dev = true): MockNuxt {
   const listenListeners: ((server: { address: () => unknown }) => unknown)[] = []
+  const closeListeners: ((...args: unknown[]) => unknown)[] = []
   return {
     options: {
       dev,
@@ -44,17 +65,28 @@ function createMockNuxt(dev = true): MockNuxt {
       if (name === 'listen') {
         listenListeners.push(fn as (server: { address: () => unknown }) => unknown)
       }
+      if (name === 'close') {
+        closeListeners.push(fn)
+      }
     },
     async triggerListen(server) {
       for (const fn of listenListeners) {
         await fn(server)
       }
     },
+    async triggerClose() {
+      for (const fn of closeListeners) {
+        await fn()
+      }
+    },
   }
 }
 
 describe('nuxt-cloudflared-tunnel module', () => {
+  let savedSignals: ReturnType<typeof snapshotSignals>
+
   beforeEach(() => {
+    savedSignals = snapshotSignals()
     startTunnel.mockReset()
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -62,6 +94,7 @@ describe('nuxt-cloudflared-tunnel module', () => {
   })
 
   afterEach(() => {
+    restoreSignals(savedSignals)
     vi.restoreAllMocks()
   })
 
@@ -209,12 +242,106 @@ describe('nuxt-cloudflared-tunnel module', () => {
 
     expect(console.error).toHaveBeenCalled()
   })
+
+  it('registers a close hook to tear down tunnels', async () => {
+    const nuxt = createMockNuxt()
+    const hookSpy = vi.spyOn(nuxt, 'hook')
+
+    await rawTunnelModule.setup({ enabled: true, log: true }, nuxt)
+
+    expect(hookSpy).toHaveBeenCalledWith('close', expect.any(Function))
+  })
+
+  it('does not register a close hook when disabled', async () => {
+    const nuxt = createMockNuxt()
+    const hookSpy = vi.spyOn(nuxt, 'hook')
+
+    await rawTunnelModule.setup({ enabled: false, log: true }, nuxt)
+
+    expect(hookSpy).not.toHaveBeenCalledWith('close', expect.any(Function))
+  })
+
+  it('closes all tunnels when the close hook fires', async () => {
+    const closeA = vi.fn().mockResolvedValue(undefined)
+    const closeB = vi.fn().mockResolvedValue(undefined)
+    startTunnel
+      .mockResolvedValueOnce({
+        getURL: vi.fn().mockResolvedValue('https://a.trycloudflare.com'),
+        close: closeA,
+      })
+      .mockResolvedValueOnce({
+        getURL: vi.fn().mockResolvedValue('https://b.trycloudflare.com'),
+        close: closeB,
+      })
+
+    const nuxt = createMockNuxt()
+    await rawTunnelModule.setup(
+      { enabled: true, log: false, tunnels: [{ port: 8080, label: 'API' }] },
+      nuxt,
+    )
+    await nuxt.triggerListen({ address: () => ({ port: 3000 }) })
+
+    expect(startTunnel).toHaveBeenCalledTimes(2)
+    expect(closeA).not.toHaveBeenCalled()
+    expect(closeB).not.toHaveBeenCalled()
+
+    await nuxt.triggerClose()
+
+    expect(closeA).toHaveBeenCalledTimes(1)
+    expect(closeB).toHaveBeenCalledTimes(1)
+  })
+
+  it('registers SIGTERM and SIGHUP handlers when enabled', async () => {
+    const onceSpy = vi.spyOn(process, 'once')
+    const nuxt = createMockNuxt()
+
+    await rawTunnelModule.setup({ enabled: true, log: true }, nuxt)
+
+    expect(onceSpy).toHaveBeenCalledWith('SIGTERM', expect.any(Function))
+    expect(onceSpy).toHaveBeenCalledWith('SIGHUP', expect.any(Function))
+  })
+
+  it('closes tunnels when SIGTERM fires', async () => {
+    const closeFn = vi.fn().mockResolvedValue(undefined)
+    startTunnel.mockResolvedValue({
+      getURL: vi.fn().mockResolvedValue('https://a.trycloudflare.com'),
+      close: closeFn,
+    })
+
+    const handlers: Record<string, () => void> = {}
+    vi.spyOn(process, 'once').mockImplementation((signal, fn) => {
+      if (typeof signal === 'string') {
+        handlers[signal] = fn as () => void
+      }
+      return process
+    })
+
+    const nuxt = createMockNuxt()
+    await rawTunnelModule.setup({ enabled: true, log: false }, nuxt)
+    await nuxt.triggerListen({ address: () => ({ port: 3000 }) })
+
+    expect(closeFn).not.toHaveBeenCalled()
+
+    // Mock process.kill to prevent the signal re-raise from terminating
+    // the test process. Must stay mocked until all microtasks (closeTunnels +
+    // .finally) have flushed.
+    const killSpy = vi.spyOn(process, 'kill').mockImplementation(() => true)
+    handlers.SIGTERM?.()
+    // Flush all pending microtasks before restoring the spy
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    expect(closeFn).toHaveBeenCalledTimes(1)
+    killSpy.mockRestore()
+  })
 })
 
 // --- Storybook shorthand + tunnels array tests ---
 
 describe('nuxt-cloudflared-tunnel module · extra tunnels', () => {
+  let savedSignals: ReturnType<typeof snapshotSignals>
+
   beforeEach(() => {
+    savedSignals = snapshotSignals()
     startTunnel.mockReset()
     vi.spyOn(console, 'log').mockImplementation(() => {})
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -222,6 +349,7 @@ describe('nuxt-cloudflared-tunnel module · extra tunnels', () => {
   })
 
   afterEach(() => {
+    restoreSignals(savedSignals)
     vi.restoreAllMocks()
   })
 
