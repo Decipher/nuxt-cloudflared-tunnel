@@ -149,6 +149,8 @@ For each extra tunnel target (including `storybook: true`), steps 2-3 repeat wit
 
 If `untun` fails to start a tunnel (no tunnel returned, or the call rejects, e.g. no network access to Cloudflare's edge), the error is logged with `console.error` and dev server startup continues unaffected.
 
+When the dev server shuts down, all tracked tunnels are closed via `tunnel.close()` on the Nuxt `close` hook. `SIGTERM` and `SIGHUP` handlers are also registered (in addition to `untun`'s built-in `SIGINT` handling) so that non-interactive teardowns (process supervisors, terminal close) don't orphan the `cloudflared` child process.
+
 ## FAQ
 
 **Q: Does this work in production?**

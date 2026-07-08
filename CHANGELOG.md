@@ -5,6 +5,12 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- Tunnels are now closed on dev-server teardown (`nuxt.hook('close')`) instead of being discarded, which orphaned `cloudflared` child processes. `SIGTERM` and `SIGHUP` handlers are also registered so non-interactive teardowns (process supervisors, terminal close) don't leave stale processes behind. ([#6](https://github.com/Decipher/nuxt-cloudflared-tunnel/issues/6))
+
 ## [0.1.0] - 2026-06-29
 
 ### Added
