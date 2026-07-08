@@ -5,6 +5,18 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v0.1.1
+
+[compare changes](https://github.com/Decipher/nuxt-cloudflared-tunnel/compare/v0.1.0...v0.1.1)
+
+### 🩹 Fixes
+
+- **#6:** Close tunnel handles on dev-server teardown ([fbb631b](https://github.com/Decipher/nuxt-cloudflared-tunnel/commit/fbb631b))
+
+### ❤️ Contributors
+
+- Administrator <gitlab_admin_f6a996@example.com>
+
 ## [0.1.0] - 2026-06-29
 
 ### Added

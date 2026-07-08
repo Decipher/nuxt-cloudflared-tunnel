@@ -1,6 +1,6 @@
 {
   "name": "nuxt-cloudflared-tunnel",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Nuxt module that opens a Cloudflare Quick Tunnel to the dev server on startup",
   "license": "MIT",
   "type": "module",
